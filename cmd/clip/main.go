@@ -4,8 +4,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"golang.design/x/clipboard"
@@ -164,7 +166,77 @@ func main() {
 		},
 	}
 
-	root.AddCommand(listCmd, searchCmd, copyCmd, showCmd, deleteCmd, clearCmd)
+	// ── stage ─────────────────────────────────────────────────────────────────
+	var stageAfter time.Duration
+	stageCmd := &cobra.Command{
+		Use:   "stage <index>",
+		Short: "Load entry <index> into the clipboard after a delay (default 1s)",
+		Long: `Stage detaches immediately and loads the entry into the clipboard after the
+delay, so you can paste whatever is currently on the clipboard first.
+
+Example:
+  clip stage 1        # load slot 1 after 1s (default)
+  clip stage 1 -w 2s  # load slot 1 after 2s`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			idx, err := strconv.Atoi(args[0])
+			if err != nil {
+				return fmt.Errorf("index must be a number")
+			}
+			entries := openStore().All()
+			if idx < 0 || idx >= len(entries) {
+				return fmt.Errorf("index %d out of range (0–%d)", idx, len(entries)-1)
+			}
+
+			// Re-exec ourselves as a detached worker so this process returns immediately.
+			self, err := os.Executable()
+			if err != nil {
+				return fmt.Errorf("cannot locate executable: %w", err)
+			}
+			worker := exec.Command(self, "_stage-worker",
+				strconv.Itoa(idx),
+				stageAfter.String(),
+			)
+			worker.Stdin = nil
+			worker.Stdout = nil
+			worker.Stderr = nil
+			if err := worker.Start(); err != nil {
+				return fmt.Errorf("start worker: %w", err)
+			}
+			// Detach — do not wait.
+			go worker.Wait() //nolint:errcheck
+			fmt.Printf("Staging slot %d in %s.\n", idx, stageAfter)
+			return nil
+		},
+	}
+	stageCmd.Flags().DurationVarP(&stageAfter, "wait", "w", time.Second, "delay before loading into clipboard")
+
+	// ── _stage-worker (internal, not shown in help) ────────────────────────────
+	workerCmd := &cobra.Command{
+		Use:    "_stage-worker <index> <duration>",
+		Hidden: true,
+		Args:   cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			idx, _ := strconv.Atoi(args[0])
+			delay, err := time.ParseDuration(args[1])
+			if err != nil {
+				return err
+			}
+			entries := openStore().All()
+			if idx < 0 || idx >= len(entries) {
+				return fmt.Errorf("index out of range")
+			}
+			text := entries[idx].Text
+			time.Sleep(delay)
+			if err := clipboard.Init(); err != nil {
+				return err
+			}
+			clipboard.Write(clipboard.FmtText, []byte(text))
+			return nil
+		},
+	}
+
+	root.AddCommand(listCmd, searchCmd, copyCmd, showCmd, deleteCmd, clearCmd, stageCmd, workerCmd)
 
 	// Default: show list when called with no subcommand.
 	root.RunE = listCmd.RunE
