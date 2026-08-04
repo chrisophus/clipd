@@ -12,8 +12,8 @@ go install github.com/chrisophus/clipd/cmd/clip@latest
 Or build locally:
 
 ```bash
-go build -o ~/bin/clipd ./cmd/clipd
-go build -o ~/bin/clip  ./cmd/clip
+go build -o bin/clipd ./cmd/clipd
+go build -o bin/clip  ./cmd/clip
 ```
 
 ## Usage
