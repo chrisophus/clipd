@@ -205,7 +205,6 @@ Example:
 			}
 			// Detach — do not wait.
 			go worker.Wait() //nolint:errcheck
-			fmt.Printf("Staging slot %d in %s.\n", idx, stageAfter)
 			return nil
 		},
 	}
