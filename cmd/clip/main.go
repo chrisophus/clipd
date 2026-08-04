@@ -110,10 +110,10 @@ func main() {
 		},
 	}
 
-	// ── show ──────────────────────────────────────────────────────────────────
-	showCmd := &cobra.Command{
-		Use:   "show <index>",
-		Short: "Print the full text of entry <index>",
+	// ── paste ─────────────────────────────────────────────────────────────────
+	pasteCmd := &cobra.Command{
+		Use:   "paste <index>",
+		Short: "Print the full text of entry <index> to stdout",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			idx, err := strconv.Atoi(args[0])
@@ -235,7 +235,7 @@ Example:
 		},
 	}
 
-	root.AddCommand(listCmd, searchCmd, copyCmd, showCmd, deleteCmd, clearCmd, stageCmd, workerCmd)
+	root.AddCommand(listCmd, searchCmd, copyCmd, pasteCmd, deleteCmd, clearCmd, stageCmd, workerCmd)
 
 	// Default: show list when called with no subcommand.
 	root.RunE = listCmd.RunE
