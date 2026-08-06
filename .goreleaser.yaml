@@ -1,0 +1,69 @@
+version: 2
+
+project_name: clipd
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: clip
+    binary: clip
+    main: ./cmd/clip
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/chrisophus/clipd/internal/version.Version={{.Version}}
+      - -X github.com/chrisophus/clipd/internal/version.Commit={{.Commit}}
+      - -X github.com/chrisophus/clipd/internal/version.Date={{.Date}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: clipd
+    binary: clipd
+    main: ./cmd/clipd
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/chrisophus/clipd/internal/version.Version={{.Version}}
+      - -X github.com/chrisophus/clipd/internal/version.Commit={{.Commit}}
+      - -X github.com/chrisophus/clipd/internal/version.Date={{.Date}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: chrisophus
+    name: clipd
+  draft: false
+  prerelease: auto

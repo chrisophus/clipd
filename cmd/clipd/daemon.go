@@ -16,6 +16,7 @@ import (
 	"golang.design/x/clipboard"
 
 	"github.com/chrisophus/clipd/internal/history"
+	"github.com/chrisophus/clipd/internal/version"
 )
 
 func defaultHistoryPath() string {
@@ -38,7 +39,7 @@ func main() {
 		log.Fatalf("clipd: init clipboard: %v", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "clipd: watching clipboard, history at %s\n", path)
+	fmt.Fprintf(os.Stderr, "clipd %s: watching clipboard, history at %s\n", version.Version, path)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

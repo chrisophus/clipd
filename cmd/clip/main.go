@@ -16,6 +16,7 @@ import (
 	"golang.design/x/clipboard"
 
 	"github.com/chrisophus/clipd/internal/history"
+	"github.com/chrisophus/clipd/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -89,8 +90,18 @@ func startStageWorker(idx int, delay time.Duration) error {
 
 func main() {
 	root := &cobra.Command{
-		Use:   "clip",
-		Short: "Manage recent clipboard items",
+		Use:     "clip",
+		Short:   "Manage recent clipboard items",
+		Version: version.Version,
+	}
+
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("clip %s (commit %s, built %s)\n",
+				version.Version, version.Commit, version.Date)
+		},
 	}
 
 	// ── list ──────────────────────────────────────────────────────────────────
@@ -340,7 +351,7 @@ Example:
 		},
 	}
 
-	root.AddCommand(listCmd, searchCmd, copyCmd, pasteCmd, addCmd, deleteCmd, clearCmd, stageCmd, workerCmd)
+	root.AddCommand(listCmd, searchCmd, copyCmd, pasteCmd, addCmd, deleteCmd, clearCmd, stageCmd, workerCmd, versionCmd)
 
 	// Default: show list when called with no subcommand.
 	root.RunE = listCmd.RunE
