@@ -4,16 +4,28 @@ A lightweight clipboard manager for macOS and Linux (desktop or headless-over-SS
 
 ## Install
 
+Download pre-built binaries for macOS or Linux from the
+[releases page](https://github.com/chrisophus/clipd/releases), or install
+from source:
+
 ```bash
 go install github.com/chrisophus/clipd/cmd/clipd@latest
 go install github.com/chrisophus/clipd/cmd/clip@latest
 ```
 
-Or build locally:
+### Build locally
 
 ```bash
-go build -o bin/clipd ./cmd/clipd
-go build -o bin/clip  ./cmd/clip
+make build        # compiles clip and clipd into bin/
+make install      # installs into $(GOPATH)/bin
+make test         # runs tests
+make clean        # removes bin/
+```
+
+To cut a new release (pushes a tag, which triggers the GitHub Actions workflow):
+
+```bash
+make release VERSION=1.2.3
 ```
 
 ## Usage
@@ -224,4 +236,11 @@ internal/
   history/
     history.go             # Store: thread-safe, atomic saves, dedup
     history_test.go
+  version/
+    version.go             # build-time version info (injected via ldflags)
+.github/
+  workflows/
+    release.yml            # publishes binaries to GitHub Releases on v* tag
+.goreleaser.yaml           # cross-compilation config (linux/darwin, amd64/arm64)
+Makefile                   # build / test / install / release targets
 ```
