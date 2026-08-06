@@ -1,6 +1,6 @@
 # clipd
 
-A lightweight macOS clipboard manager: a background daemon (`clipd`) that captures clipboard history, and a CLI (`clip`) to list, search, and restore past clips.
+A lightweight clipboard manager for macOS and Linux (desktop or headless-over-SSH): a background daemon (`clipd`) that captures clipboard history, and a CLI (`clip`) to list, search, and restore past clips.
 
 ## Install
 
@@ -37,6 +37,7 @@ clip                          # same as "clip list"
 clip list [-n 20]             # show most recent N entries (index, time, preview)
 clip search <query>           # case-insensitive substring search
 clip paste  <index>           # print full text of entry to stdout
+clip add    [text]            # add text (or stdin) to history directly
 clip copy   <index>           # copy entry back to the clipboard
 clip stage  <index> [-w 1s]   # load entry into the clipboard after a delay
 clip delete <index>           # remove entry from history
@@ -106,6 +107,10 @@ Note that the staged text sits on the clipboard afterwards like any other
 clip — follow up with `clip stage 0` (or another `copy`) if you would rather
 not leave a password there.
 
+This workflow also works when `clip` runs on a **headless server over SSH** —
+the staged entry is delivered to the clipboard of the machine you're sitting
+at, via the terminal. See [Headless servers](#headless-servers-ssh) below.
+
 ### Configuration
 
 | Env var        | Default                                    | Purpose           |
@@ -135,6 +140,69 @@ Then load it:
 
 ```bash
 launchctl load ~/Library/LaunchAgents/com.ccason.clipd.plist
+```
+
+## Linux
+
+Both binaries are pure Go on Linux — no cgo, no C toolchain needed. Behavior
+depends on whether a display server is available.
+
+### Headless servers (SSH)
+
+With no display server there is no system clipboard, so `clip copy` and
+`clip stage` deliver the entry through the terminal instead, using the
+[OSC 52](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Operating-System-Commands)
+escape sequence. That sets the clipboard of the machine your terminal is
+running on — through SSH — which is exactly what you want: stage a password
+on the server, paste it locally at the prompt.
+
+There is no clipboard for `clipd` to watch, so don't run the daemon; put
+entries into history explicitly with `clip add`:
+
+```bash
+clip add "ansible scs001246955-4 -i inventory.yml -m shell \
+  -a 'go clean -cache && docker builder prune -af' --become --ask-pass"
+read -rs pw && printf %s "$pw" | clip add && unset pw   # stays out of shell history
+```
+
+From there the [staging workflow](#staging-the-next-clip) is identical to
+macOS.
+
+Requirements:
+
+- A terminal emulator that supports OSC 52 writes: iTerm2, kitty, Alacritty,
+  WezTerm, foot, Ghostty, Windows Terminal, and recent xterm all do.
+  (The stock GNOME Terminal does not.)
+- Inside tmux, `set-clipboard` must be `on` or `external` (`external` is the
+  default).
+
+### Desktop (X11 / Wayland)
+
+Everything works as on macOS, with one difference under the hood: X11 and
+Wayland clipboard selections only live as long as the process that set them,
+so `clip copy` and `clip stage` leave a small background `clip` worker
+resident as the selection owner. It exits as soon as anything else takes the
+clipboard.
+
+To auto-start the daemon, create `~/.config/systemd/user/clipd.service`:
+
+```ini
+[Unit]
+Description=clipd clipboard history daemon
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/bin/clipd
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Then enable it:
+
+```bash
+systemctl --user enable --now clipd
 ```
 
 ## File layout
