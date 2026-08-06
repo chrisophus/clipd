@@ -1,5 +1,8 @@
 // Package main is the clipd background daemon.
-// It polls the macOS clipboard and appends new entries to the history store.
+// It polls the system clipboard and appends new entries to the history store.
+// It needs a clipboard to watch, so it only runs where a display server is
+// available (macOS, or Linux under X11/Wayland) — on headless machines use
+// "clip add" instead.
 package main
 
 import (
