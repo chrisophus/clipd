@@ -173,8 +173,17 @@ Requirements:
 - A terminal emulator that supports OSC 52 writes: iTerm2, kitty, Alacritty,
   WezTerm, foot, Ghostty, Windows Terminal, and recent xterm all do.
   (The stock GNOME Terminal does not.)
-- Inside tmux, `set-clipboard` must be `on` or `external` (`external` is the
-  default).
+- **iTerm2**: enable *Settings → General → Selection → "Applications in
+  terminal may access clipboard"* — it is off by default, and without it
+  iTerm2 silently ignores OSC 52.
+- **tmux**: add `set -g set-clipboard on` to `~/.tmux.conf` on the server.
+  The default (`external`) forwards only tmux's own copy-mode yanks and
+  drops OSC 52 coming from applications inside panes. Note that with `on`,
+  tmux also keeps a copy of the text in its paste-buffer list
+  (`tmux delete-buffer` discards it — worth doing after staging a password).
+  If it still doesn't forward, your server's terminfo may lack the `Ms`
+  capability for your `$TERM`; add
+  `set -as terminal-features ',xterm-256color:clipboard'` as well.
 
 ### Desktop (X11 / Wayland)
 
