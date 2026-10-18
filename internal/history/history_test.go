@@ -1,6 +1,7 @@
 package history
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -86,5 +87,118 @@ func TestAtomicSave(t *testing.T) {
 	// Temp file must not linger.
 	if _, err := os.Stat(s.path + ".tmp"); !os.IsNotExist(err) {
 		t.Error("temp file should not exist after save")
+	}
+}
+
+func TestHistoryLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		options []Option
+		limit   int
+	}{
+		{name: "default", limit: 500},
+		{name: "custom", options: []Option{WithMaxEntries(2)}, limit: 2},
+		{name: "single", options: []Option{WithMaxEntries(1)}, limit: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "history.json")
+			s, err := Open(path, tc.options...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < tc.limit+2; i++ {
+				if added, err := s.Add(fmt.Sprint(i)); err != nil || !added {
+					t.Fatalf("Add(%d): added=%v, err=%v", i, added, err)
+				}
+			}
+			check := func(entries []Entry) {
+				t.Helper()
+				if len(entries) != tc.limit {
+					t.Fatalf("got %d entries, want %d", len(entries), tc.limit)
+				}
+				for i, entry := range entries {
+					if want := fmt.Sprint(tc.limit + 1 - i); entry.Text != want {
+						t.Errorf("entry %d = %q, want %q", i, entry.Text, want)
+					}
+				}
+			}
+			check(s.All())
+			reloaded, err := Open(path, tc.options...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(reloaded.All())
+		})
+	}
+}
+
+func TestInvalidHistoryLimit(t *testing.T) {
+	for _, limit := range []int{0, -1} {
+		if _, err := Open(filepath.Join(t.TempDir(), "history.json"), WithMaxEntries(limit)); err == nil {
+			t.Errorf("Open with limit %d: expected error", limit)
+		}
+	}
+}
+
+func TestLowerHistoryLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.json")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"a", "b", "c"} {
+		if _, err := s.Add(text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err = Open(path, WithMaxEntries(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add("a"); err != nil {
+		t.Fatal(err)
+	}
+	entries := s.All()
+	if len(entries) != 2 || entries[0].Text != "a" || entries[1].Text != "c" {
+		t.Fatalf("unexpected entries after lowering limit: %v", entries)
+	}
+}
+
+// A store opened without a limit (the clip CLI) must not trim history that a
+// store opened with a larger one (the daemon) keeps.
+func TestOpenUsesRecordedLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.json")
+	daemon, err := Open(path, WithMaxEntries(1000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 600; i++ {
+		if _, err := daemon.Add(fmt.Sprint(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cli, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cli.Add("x"); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(cli.All()); got != 601 {
+		t.Fatalf("got %d entries after CLI add, want 601", got)
+	}
+}
+
+func TestOpenIgnoresInvalidRecordedLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.json")
+	if err := os.WriteFile(path+".limit", []byte("nope\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.maxEntries != DefaultMaxEntries {
+		t.Fatalf("maxEntries = %d, want default %d", s.maxEntries, DefaultMaxEntries)
 	}
 }
