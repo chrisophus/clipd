@@ -6,6 +6,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -25,12 +26,19 @@ func defaultHistoryPath() string {
 }
 
 func main() {
+	maxEntries := flag.Int("max-entries", history.DefaultMaxEntries, "maximum number of history entries (must be positive)")
+	pollInterval := flag.Duration("poll-interval", 500*time.Millisecond, "clipboard poll interval (must be positive)")
+	flag.Parse()
+	if *maxEntries <= 0 || *pollInterval <= 0 {
+		log.Fatal("clipd: max-entries and poll-interval must be positive")
+	}
+
 	path := os.Getenv("CLIPD_HISTORY")
 	if path == "" {
 		path = defaultHistoryPath()
 	}
 
-	store, err := history.Open(path)
+	store, err := history.Open(path, history.WithMaxEntries(*maxEntries))
 	if err != nil {
 		log.Fatalf("clipd: open history: %v", err)
 	}
@@ -44,7 +52,7 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(*pollInterval)
 	defer ticker.Stop()
 
 	for {

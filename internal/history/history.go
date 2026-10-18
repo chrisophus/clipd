@@ -3,13 +3,24 @@ package history
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
 
-const maxEntries = 500
+// DefaultMaxEntries is the history limit used when no option is supplied.
+const DefaultMaxEntries = 500
+
+// Option configures a history store.
+type Option func(*Store)
+
+// WithMaxEntries sets the maximum number of entries retained on Add.
+// The limit must be positive.
+func WithMaxEntries(limit int) Option {
+	return func(s *Store) { s.maxEntries = limit }
+}
 
 // Entry is a single clipboard snapshot.
 type Entry struct {
@@ -19,17 +30,24 @@ type Entry struct {
 
 // Store is a thread-safe clipboard history backed by a JSON file.
 type Store struct {
-	mu      sync.Mutex
-	path    string
-	entries []Entry
+	mu         sync.Mutex
+	path       string
+	entries    []Entry
+	maxEntries int
 }
 
 // Open loads (or creates) the history file at path.
-func Open(path string) (*Store, error) {
+func Open(path string, options ...Option) (*Store, error) {
+	s := &Store{path: path, maxEntries: DefaultMaxEntries}
+	for _, option := range options {
+		option(s)
+	}
+	if s.maxEntries <= 0 {
+		return nil, fmt.Errorf("history limit must be positive")
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
-	s := &Store{path: path}
 	_ = s.load() // ignore missing-file errors on first run
 	return s, nil
 }
@@ -67,8 +85,8 @@ func (s *Store) Add(text string) (bool, error) {
 
 	// Prepend (newest first) and cap.
 	s.entries = append([]Entry{{Text: text, At: time.Now()}}, filtered...)
-	if len(s.entries) > maxEntries {
-		s.entries = s.entries[:maxEntries]
+	if len(s.entries) > s.maxEntries {
+		s.entries = s.entries[:s.maxEntries]
 	}
 
 	return true, s.save()
