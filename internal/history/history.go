@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,9 +19,14 @@ const DefaultMaxEntries = 500
 type Option func(*Store)
 
 // WithMaxEntries sets the maximum number of entries retained on Add.
-// The limit must be positive.
+// The limit must be positive. It is recorded next to the history file, so a
+// later Open of the same path without this option uses it too: otherwise the
+// clip CLI would trim history the daemon was configured to keep.
 func WithMaxEntries(limit int) Option {
-	return func(s *Store) { s.maxEntries = limit }
+	return func(s *Store) {
+		s.maxEntries = limit
+		s.limitSet = true
+	}
 }
 
 // Entry is a single clipboard snapshot.
@@ -34,6 +41,7 @@ type Store struct {
 	path       string
 	entries    []Entry
 	maxEntries int
+	limitSet   bool
 }
 
 // Open loads (or creates) the history file at path.
@@ -47,6 +55,13 @@ func Open(path string, options ...Option) (*Store, error) {
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
+	}
+	if s.limitSet {
+		if err := s.saveLimit(); err != nil {
+			return nil, err
+		}
+	} else if limit, ok := s.loadLimit(); ok {
+		s.maxEntries = limit
 	}
 	_ = s.load() // ignore missing-file errors on first run
 	return s, nil
@@ -130,4 +145,29 @@ func (s *Store) save() error {
 		return err
 	}
 	return os.Rename(tmp, s.path)
+}
+
+func (s *Store) limitPath() string { return s.path + ".limit" }
+
+// loadLimit reads the limit recorded by WithMaxEntries. A missing or invalid
+// file reports false, leaving the default in place.
+func (s *Store) loadLimit() (int, bool) {
+	data, err := os.ReadFile(s.limitPath())
+	if err != nil {
+		return 0, false
+	}
+	limit, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || limit <= 0 {
+		return 0, false
+	}
+	return limit, true
+}
+
+func (s *Store) saveLimit() error {
+	// Write atomically via temp file.
+	tmp := s.limitPath() + ".tmp"
+	if err := os.WriteFile(tmp, []byte(strconv.Itoa(s.maxEntries)+"\n"), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, s.limitPath())
 }

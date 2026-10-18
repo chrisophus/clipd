@@ -163,3 +163,42 @@ func TestLowerHistoryLimit(t *testing.T) {
 		t.Fatalf("unexpected entries after lowering limit: %v", entries)
 	}
 }
+
+// A store opened without a limit (the clip CLI) must not trim history that a
+// store opened with a larger one (the daemon) keeps.
+func TestOpenUsesRecordedLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.json")
+	daemon, err := Open(path, WithMaxEntries(1000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 600; i++ {
+		if _, err := daemon.Add(fmt.Sprint(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cli, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cli.Add("x"); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(cli.All()); got != 601 {
+		t.Fatalf("got %d entries after CLI add, want 601", got)
+	}
+}
+
+func TestOpenIgnoresInvalidRecordedLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.json")
+	if err := os.WriteFile(path+".limit", []byte("nope\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.maxEntries != DefaultMaxEntries {
+		t.Fatalf("maxEntries = %d, want default %d", s.maxEntries, DefaultMaxEntries)
+	}
+}

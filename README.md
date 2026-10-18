@@ -48,7 +48,8 @@ clipd -max-entries 1000 -poll-interval 250ms &
 `-max-entries` defaults to `500`; `-poll-interval` defaults to `500ms` and
 accepts Go durations such as `250ms` or `1s`. Both values must be positive.
 The history limit is applied when a new entry is added; older entries are
-removed first. Run `clipd -h` to see the flags.
+removed first. The daemon records its limit in `history.json.limit`, so
+`clip add` keeps the same number of entries. Run `clipd -h` to see the flags.
 
 To auto-start at login, add `clipd &` to `~/.zprofile`, or create a
 `launchd` plist (see below).
