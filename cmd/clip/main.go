@@ -89,6 +89,14 @@ func startStageWorker(idx int, delay time.Duration) error {
 }
 
 func main() {
+	if err := newRootCmd().Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+// newRootCmd builds the clip command tree. Commands write to cmd.OutOrStdout
+// and read from cmd.InOrStdin so tests can capture and feed them.
+func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:     "clip",
 		Short:   "Manage recent clipboard items",
@@ -99,7 +107,7 @@ func main() {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("clip %s (commit %s, built %s)\n",
+			fmt.Fprintf(cmd.OutOrStdout(), "clip %s (commit %s, built %s)\n",
 				version.Version, version.Commit, version.Date)
 		},
 	}
@@ -113,7 +121,7 @@ func main() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			entries := openStore().All()
 			if len(entries) == 0 {
-				fmt.Println("(no clipboard history)")
+				fmt.Fprintln(cmd.OutOrStdout(), "(no clipboard history)")
 				return nil
 			}
 			limit := listN
@@ -121,7 +129,7 @@ func main() {
 				limit = len(entries)
 			}
 			for i, e := range entries[:limit] {
-				fmt.Printf("%3d  %s  %s\n", i, e.At.Format("01-02 15:04"), preview(e.Text, 72))
+				fmt.Fprintf(cmd.OutOrStdout(), "%3d  %s  %s\n", i, e.At.Format("01-02 15:04"), preview(e.Text, 72))
 			}
 			return nil
 		},
@@ -140,12 +148,12 @@ func main() {
 			found := 0
 			for i, e := range entries {
 				if strings.Contains(strings.ToLower(e.Text), q) {
-					fmt.Printf("%3d  %s  %s\n", i, e.At.Format("01-02 15:04"), preview(e.Text, 72))
+					fmt.Fprintf(cmd.OutOrStdout(), "%3d  %s  %s\n", i, e.At.Format("01-02 15:04"), preview(e.Text, 72))
 					found++
 				}
 			}
 			if found == 0 {
-				fmt.Println("(no matches)")
+				fmt.Fprintln(cmd.OutOrStdout(), "(no matches)")
 			}
 			return nil
 		},
@@ -185,7 +193,7 @@ func main() {
 					return err
 				}
 			}
-			fmt.Printf("Copied entry %d to clipboard.\n", idx)
+			fmt.Fprintf(cmd.OutOrStdout(), "Copied entry %d to clipboard.\n", idx)
 			return nil
 		},
 	}
@@ -204,7 +212,7 @@ func main() {
 			if idx < 0 || idx >= len(entries) {
 				return fmt.Errorf("index %d out of range (0–%d)", idx, len(entries)-1)
 			}
-			fmt.Println(entries[idx].Text)
+			fmt.Fprintln(cmd.OutOrStdout(), entries[idx].Text)
 			return nil
 		},
 	}
@@ -228,7 +236,7 @@ func main() {
 			if err := store.Remove(idx); err != nil {
 				return err
 			}
-			fmt.Printf("Deleted entry %d.\n", idx)
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted entry %d.\n", idx)
 			return nil
 		},
 	}
@@ -241,7 +249,7 @@ func main() {
 			if err := openStore().Clear(); err != nil {
 				return err
 			}
-			fmt.Println("Clipboard history cleared.")
+			fmt.Fprintln(cmd.OutOrStdout(), "Clipboard history cleared.")
 			return nil
 		},
 	}
@@ -261,7 +269,7 @@ Example:
 			if len(args) > 0 {
 				text = strings.Join(args, " ")
 			} else {
-				data, err := io.ReadAll(os.Stdin)
+				data, err := io.ReadAll(cmd.InOrStdin())
 				if err != nil {
 					return err
 				}
@@ -275,10 +283,10 @@ Example:
 				return err
 			}
 			if !added {
-				fmt.Println("Already at top of history.")
+				fmt.Fprintln(cmd.OutOrStdout(), "Already at top of history.")
 				return nil
 			}
-			fmt.Println("Added entry 0.")
+			fmt.Fprintln(cmd.OutOrStdout(), "Added entry 0.")
 			return nil
 		},
 	}
@@ -356,9 +364,7 @@ Example:
 	// Default: show list when called with no subcommand.
 	root.RunE = listCmd.RunE
 
-	if err := root.Execute(); err != nil {
-		os.Exit(1)
-	}
+	return root
 }
 
 // preview returns a single-line preview of text, truncated to maxRunes.
